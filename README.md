@@ -2,7 +2,7 @@
 A solar powered firefly in CircuitPython designed for the Pi Pico
 
 A yellow-green led is used to emulate a firefly by smoothly pulsating in a natural way. 
-The led should be connected to GP15 and ground.
+If using an original pico, the board.LED works well for this. If using a clone board with a less pleasant led a custom one can be used.
 
 A 5516 5-10k photoresistor is used to determine the amount of daylight. It is connected to ADC0
 My original approach used a voltage divider but this needed to be dialed in each time.
