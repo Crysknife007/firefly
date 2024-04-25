@@ -1,6 +1,5 @@
 # Pi Pico Firefly Simulator With Sleep and Daytime Sensing
-# 5v Solar Panel has a voltage divider of two 10k resistors.
-# The divided voltage is sent to ADC0 on the pico for light sensing
+# 5v Solar Panel has a photoresistor on ADC0 connected to ground 
 # By Spike Snell 2024
 
 # Import what we need to run the onboard led
@@ -10,7 +9,7 @@ import time, board, pwmio, random, microcontroller, alarm
 from analogio import AnalogIn
 
 # Initialize the duskThreshold
-duskThreshold = 500
+duskThreshold = 1200
 
 # Set the number of blinks we should have for a single firefly
 numberOfBlinks = 1000
@@ -37,7 +36,7 @@ adc = AnalogIn(board.A0)
 freq = random.randint( 2000, 200000 )
 
 # Set up the led
-led = pwmio.PWMOut( board.LED, frequency = freq, duty_cycle = 0 )
+led = pwmio.PWMOut( board.GP15, frequency = freq, duty_cycle = 0 )
 
 # Set up the firefly blink loop
 def runFirefly():
@@ -66,28 +65,32 @@ def runFirefly():
 # Loop forever
 while True:
 
-    # If it is not daytime, and the daylight count is sufficient, then blink the light
-    if adc.value < duskThreshold and daylightCount >= daylightCountNeeded:
+    # Get the adc value
+    adcValue = adc.value;
 
-        # Set the daylight count back to 0
-        daylightCount = 0
+    # If it is not daytime, and the daylight count is sufficient, then blink the light
+    if adcValue > duskThreshold and daylightCount >= daylightCountNeeded:
 
         # Run the firefly blink loop
         runFirefly()
 
+        # Reset the board to start emulate a new bug cycle  
+        microcontroller.reset()
 
     # Else if we haven't seen enough daylight counts to blink
-    elif adc.value < duskThreshold:
+    elif adcValue > duskThreshold:
+
+        # Set the daylight count back to 0
+        daylightCount = 0
         
-        # Create an alarm to deep sleep until
+        # Create an alarm to light sleep until
         time_alarm = alarm.time.TimeAlarm( monotonic_time = time.monotonic() + pollingInterval )
 
-        # Exit the program, and then deep sleep until the alarm wakes us.
-        alarm.exit_and_deep_sleep_until_alarms( time_alarm )
+        # Do a light sleep until the alarm wakes us.
+        alarm.light_sleep_until_alarms( time_alarm )
 
-
-    # Else it must be daytime
-    else:
+    # Else if it is daytime
+    elif adcValue < duskThreshold:
 
         # Increment the daylight count
         daylightCount += 1
@@ -97,5 +100,3 @@ while True:
 
         # Do a light sleep until the alarm wakes us.
         alarm.light_sleep_until_alarms( time_alarm )
-
-
