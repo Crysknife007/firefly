@@ -36,7 +36,7 @@ adc = AnalogIn(board.A0)
 freq = random.randint( 2000, 200000 )
 
 # Set up the led
-led = pwmio.PWMOut( board.GP15, frequency = freq, duty_cycle = 0 )
+led = pwmio.PWMOut( board.LED, frequency = freq, duty_cycle = 0 )
 
 # Set up the firefly blink loop
 def runFirefly():
