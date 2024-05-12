@@ -1,42 +1,49 @@
 # Pi Pico Firefly Simulator With Sleep and Daytime Sensing
-# 5v Solar Panel has a photoresistor on ADC0 connected to ground 
-# By Spike Snell 2024
+# 5v Solar Panel has a photoresistor on ADC0 to sense daylight levels
+# https://github.com/Crysknife007/firefly - Spike Snell 2024
 
-# Import what we need to run the onboard led
+# Import what we need to run the firefly
 import time, board, pwmio, random, microcontroller, alarm
 
 # Import AnalogIn for the ADC
 from analogio import AnalogIn
 
-# Initialize the duskThreshold
-duskThreshold = 1200
-
-# Set the number of blinks we should have for a single firefly
-numberOfBlinks = 1000
-
-# Initialize the polling interval in seconds
-pollingInterval = 1800
-
-# Define the minimum time between blinks
-minimumBlinkInterval = 3
-
-# Define the maximum time between blinks
-maximumBlinkInterval = 14
-
-# Initialize the daylight count needed to trigger a blink cycle
-daylightCountNeeded = 3
-
-# Initialize the daylight counter
-daylightCount = 0
+# ----------- Configuration Options -------------------------------.
+                                                                   #
+# Initialize the duskThreshold                                     #
+duskThreshold = 1200                                               #
+                                                                   #
+# Set the number of blinks we should have for a single firefly     #
+numberOfBlinks = 1000                                              #
+                                                                   #
+# Initialize the polling interval in seconds                       #
+pollingInterval = 1800                                             #
+                                                                   #
+# Define the minimum time between blinks                           #
+minimumBlinkInterval = 3                                           #
+                                                                   #
+# Define the maximum time between blinks                           #
+maximumBlinkInterval = 14                                          #
+                                                                   #
+# Initialize the daylight count needed to trigger a blink cycle    #
+daylightCountNeeded = 3                                            #
+                                                                   #
+# Define which LED to use                                          #
+ledPin = board.GP15 # board.LED is the built-in LED                #
+                                                                   #
+# -----------------------------------------------------------------'
 
 # Set up the ADC
-adc = AnalogIn(board.A0)
+adc = AnalogIn( board.A0 )
 
 # Create a pseudorandom frequency
 freq = random.randint( 2000, 200000 )
 
-# Set up the led
-led = pwmio.PWMOut( board.LED, frequency = freq, duty_cycle = 0 )
+# Set up the LED
+led = pwmio.PWMOut( ledPin, frequency = freq, duty_cycle = 0 )
+
+# Initialize the daylight counter
+daylightCount = 0
 
 # Set up the firefly blink loop
 def runFirefly():
@@ -56,13 +63,43 @@ def runFirefly():
             # Set the led brightness
             led.duty_cycle = 65535 - f
 
-        # Define an alarm for an amount of time between minimumBlinkInterval and maximumBlinkInterval
-        time_alarm = alarm.time.TimeAlarm( monotonic_time = time.monotonic() + random.randint( minimumBlinkInterval, maximumBlinkInterval ) )
+        # Light sleep for an amount of time between minimumBlinkInterval and maximumBlinkInterval
+        lightSleep( random.randint( minimumBlinkInterval, maximumBlinkInterval ) )
 
-        # Do a light sleep until the alarm wakes us.
-        alarm.light_sleep_until_alarms( time_alarm )
+# Define the light sleep function
+def lightSleep( sleepDuration ):
 
-# Loop forever
+    # Define an alarm for an amount of time between minimumBlinkInterval and maximumBlinkInterval
+    time_alarm = alarm.time.TimeAlarm( monotonic_time = time.monotonic() + sleepDuration )
+
+    # Do a light sleep until the alarm wakes us.
+    alarm.light_sleep_until_alarms( time_alarm )
+
+# Define the deep sleep function
+def deepSleep( sleepDuration ):
+
+    # Create an alarm to deep sleep until
+    time_alarm = alarm.time.TimeAlarm( monotonic_time = time.monotonic() + sleepDuration )
+
+    # Exit the program, and then deep sleep until the alarm wakes us.
+    alarm.exit_and_deep_sleep_until_alarms( time_alarm ) 
+
+# Get the adc value
+adcValue = adc.value;
+
+# If it is currently daylight, blink the startup indication light
+if ( adcValue < duskThreshold ):  
+
+    # Turn on the LED
+    led.duty_cycle = 65535
+
+    # Light sleep for half a second
+    lightSleep( .5 )
+
+    # Turn off the LED
+    led.duty_cycle = 0 
+
+# Loop for as long as the firefly lives
 while True:
 
     # Get the adc value
@@ -74,20 +111,17 @@ while True:
         # Run the firefly blink loop
         runFirefly()
 
-        # Reset the board to start emulate a new bug cycle  
-        microcontroller.reset()
+        # Deep sleep until the next polling interval ( This resets the daylight count as well )
+        deepSleep( pollingInterval )
 
     # Else if we haven't seen enough daylight counts to blink
     elif adcValue > duskThreshold:
 
-        # Set the daylight count back to 0
-        daylightCount = 0
-        
-        # Create an alarm to light sleep until
-        time_alarm = alarm.time.TimeAlarm( monotonic_time = time.monotonic() + pollingInterval )
+        # Light sleep for 3 seconds ( Without this I have been running into issues. )
+        lightSleep( 3 )
 
-        # Do a light sleep until the alarm wakes us.
-        alarm.light_sleep_until_alarms( time_alarm )
+        # Deep sleep for one polling interval ( This resets the daylight count as well )
+        deepSleep( pollingInterval )
 
     # Else if it is daytime
     elif adcValue < duskThreshold:
@@ -95,8 +129,5 @@ while True:
         # Increment the daylight count
         daylightCount += 1
 
-        # Create an alarm to light sleep until
-        time_alarm = alarm.time.TimeAlarm( monotonic_time = time.monotonic() + pollingInterval )
-
-        # Do a light sleep until the alarm wakes us.
-        alarm.light_sleep_until_alarms( time_alarm )
+        # Light sleep for as long as our polling interval
+        lightSleep( pollingInterval )
